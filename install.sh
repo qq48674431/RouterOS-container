@@ -76,40 +76,41 @@ mkdir -p /mnt/ros_tmp
 
 LOOPDEV=$(losetup -f --show -P /tmp/chr.img)
 if [ -z "$LOOPDEV" ]; then
-    echo "Error: losetup 挂载失败 (可能是内核版本过低不支持 -P 参数)"
-    exit 1
-fi
-sleep 1
+    echo "Warning: losetup 挂载失败，跳过配置注入"
+else
+    sleep 1
 
-FOUND_PART=""
-for part in "${LOOPDEV}"p{1..5} "${LOOPDEV}"{1..5}; do
-    [ -e "$part" ] || continue
-    if mount "$part" /mnt/ros_tmp 2>/dev/null; then
-        if [ -d /mnt/ros_tmp/rw ]; then
-            FOUND_PART="$part"
-            break
-        else
+    echo "分区扫描:"
+    ls -la "${LOOPDEV}"* 2>/dev/null
+
+    FOUND_PART=""
+    for part in "${LOOPDEV}"p{1..5} "${LOOPDEV}"{1..5}; do
+        [ -e "$part" ] || continue
+        echo "  尝试挂载: $part ($(blkid -s TYPE -o value "$part" 2>/dev/null || echo '未知文件系统'))"
+        if mount "$part" /mnt/ros_tmp 2>/dev/null; then
+            echo "    已挂载，目录内容: $(ls /mnt/ros_tmp 2>/dev/null)"
+            if [ -d /mnt/ros_tmp/rw ]; then
+                FOUND_PART="$part"
+                break
+            fi
             umount /mnt/ros_tmp 2>/dev/null || true
         fi
-    fi
-done
+    done
 
-if [ -z "$FOUND_PART" ]; then
-    echo "Error: 无法在镜像中找到 rw 配置目录，注入失败。"
-    losetup -d "$LOOPDEV"
-    exit 1
-fi
-
-if [ "$IS_DHCP" = true ]; then
-    cat > /mnt/ros_tmp/rw/autorun.scr <<EOF
+    if [ -z "$FOUND_PART" ]; then
+        echo "Warning: 无法在镜像中找到 rw 配置目录，跳过配置注入"
+        losetup -d "$LOOPDEV" 2>/dev/null || true
+    else
+        if [ "$IS_DHCP" = true ]; then
+            cat > /mnt/ros_tmp/rw/autorun.scr <<EOF
 /interface ethernet set [ find default-name=ether1 ] name=wan
 /ip dhcp-client add interface=wan disabled=no
 /ip service set telnet disabled=yes
 /ip service set ssh disabled=no port=22
 /ip service set winbox disabled=no
 EOF
-else
-    cat > /mnt/ros_tmp/rw/autorun.scr <<EOF
+        else
+            cat > /mnt/ros_tmp/rw/autorun.scr <<EOF
 /interface ethernet set [ find default-name=ether1 ] name=wan
 /ip address add address=$ADDRESS interface=wan
 /ip route add gateway=$GATEWAY
@@ -117,12 +118,14 @@ else
 /ip service set ssh disabled=no port=22
 /ip service set winbox disabled=no
 EOF
-fi
+        fi
 
-echo "配置注入成功！(挂载分区: $FOUND_PART)"
-sync
-umount /mnt/ros_tmp
-losetup -d "$LOOPDEV"
+        echo "配置注入成功！(挂载分区: $FOUND_PART)"
+        sync
+        umount /mnt/ros_tmp
+        losetup -d "$LOOPDEV"
+    fi
+fi
 
 # --- 6. 写入硬盘 ---
 STORAGE=$(lsblk -dn -o NAME,TYPE | awk '$2=="disk"{print $1; exit}')
