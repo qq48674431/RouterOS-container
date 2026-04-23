@@ -4,8 +4,6 @@
 # 源仓库: qq48674431/RouterOS-container
 # ==================================================
 
-set -euo pipefail
-
 # --- 1. 配置区 ---
 GITHUB_REPO="qq48674431/RouterOS-container"
 TAG="v-7.20.8"
@@ -26,9 +24,7 @@ IMG_URL="https://github.com/${GITHUB_REPO}/releases/download/${TAG}/${IMG_NAME}"
 echo "正在从 GitHub 下载镜像..."
 echo "下载地址: $IMG_URL"
 
-curl -L -f -o /tmp/chr.img "$IMG_URL" --connect-timeout 20 --retry 3
-
-if [ $? -ne 0 ]; then
+if ! curl -L -f -o /tmp/chr.img "$IMG_URL" --connect-timeout 20 --retry 3; then
     echo "Error: 下载失败！"
     echo "请检查服务器是否能访问 GitHub，或 DNS 配置。"
     exit 1
@@ -48,11 +44,11 @@ fi
 
 IS_DHCP=false
 
-if pgrep -a dhclient 2>/dev/null | grep -q "$ETH"; then
+if pgrep -a dhclient 2>/dev/null | grep -q "$ETH" 2>/dev/null; then
     IS_DHCP=true
-elif pgrep -a dhcpcd 2>/dev/null | grep -q "$ETH"; then
+elif pgrep -a dhcpcd 2>/dev/null | grep -q "$ETH" 2>/dev/null; then
     IS_DHCP=true
-elif pgrep -a udhcpc 2>/dev/null | grep -q "$ETH"; then
+elif pgrep -a udhcpc 2>/dev/null | grep -q "$ETH" 2>/dev/null; then
     IS_DHCP=true
 elif [ -f "/var/lib/dhcp/dhclient.${ETH}.leases" ] || [ -f "/var/lib/dhclient/dhclient-${ETH}.leases" ]; then
     IS_DHCP=true
@@ -61,7 +57,7 @@ elif [ -d /etc/netplan ] && grep -rql "dhcp4.*true\|dhcp4.*yes" /etc/netplan/ 2>
 elif [ -f /etc/network/interfaces ] && grep -A5 "$ETH" /etc/network/interfaces 2>/dev/null | grep -q "dhcp"; then
     IS_DHCP=true
 elif [ -d /etc/NetworkManager/system-connections ] && nmcli -t -f NAME,DEVICE con show --active 2>/dev/null | grep -q "$ETH" && \
-     nmcli -t -f ipv4.method con show "$(nmcli -t -f NAME,DEVICE con show --active | grep "$ETH" | cut -d: -f1)" 2>/dev/null | grep -q "auto"; then
+     nmcli -t -f ipv4.method con show "$(nmcli -t -f NAME,DEVICE con show --active 2>/dev/null | grep "$ETH" | cut -d: -f1)" 2>/dev/null | grep -q "auto"; then
     IS_DHCP=true
 fi
 
@@ -88,12 +84,13 @@ sleep 1
 FOUND_PART=""
 for part in "${LOOPDEV}"p{1..5} "${LOOPDEV}"{1..5}; do
     [ -e "$part" ] || continue
-    mount "$part" /mnt/ros_tmp 2>/dev/null
-    if [ -d /mnt/ros_tmp/rw ]; then
-        FOUND_PART="$part"
-        break
-    else
-        umount /mnt/ros_tmp 2>/dev/null
+    if mount "$part" /mnt/ros_tmp 2>/dev/null; then
+        if [ -d /mnt/ros_tmp/rw ]; then
+            FOUND_PART="$part"
+            break
+        else
+            umount /mnt/ros_tmp 2>/dev/null || true
+        fi
     fi
 done
 
