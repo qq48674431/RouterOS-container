@@ -21,10 +21,13 @@ fi
 IMG_URL="https://github.com/${GITHUB_REPO}/releases/download/${TAG}/${IMG_NAME}"
 
 # --- 3. 下载镜像 ---
+IMG_PATH="/tmp/chr.img"
 echo "正在从 GitHub 下载镜像..."
 echo "下载地址: $IMG_URL"
 
-if ! curl -L -f -o /tmp/chr.img "$IMG_URL" --connect-timeout 20 --retry 3; then
+wget "$IMG_URL" -O "$IMG_PATH"
+
+if [ $? -ne 0 ]; then
     echo "Error: 下载失败！"
     echo "请检查服务器是否能访问 GitHub，或 DNS 配置。"
     exit 1
@@ -32,7 +35,8 @@ fi
 
 echo "下载完成！"
 
-# --- 4. 备份当前网络信息 & 检测静态/DHCP ---
+# --- 4. 获取网络与磁盘信息 ---
+STORAGE=$(lsblk | grep disk | awk '{print $1}' | head -n 1)
 ETH=$(ip route show default | sed -n 's/.* dev \([^\ ]*\) .*/\1/p' | head -n 1)
 ADDRESS=$(ip addr show "$ETH" | grep global | awk '{print $2}' | head -n 1)
 GATEWAY=$(ip route list | grep default | awk '{print $3}' | head -n 1)
@@ -42,111 +46,66 @@ if [ -z "$ADDRESS" ] || [ -z "$GATEWAY" ]; then
     exit 1
 fi
 
-IS_DHCP=false
-
-if pgrep -a dhclient 2>/dev/null | grep -q "$ETH" 2>/dev/null; then
-    IS_DHCP=true
-elif pgrep -a dhcpcd 2>/dev/null | grep -q "$ETH" 2>/dev/null; then
-    IS_DHCP=true
-elif pgrep -a udhcpc 2>/dev/null | grep -q "$ETH" 2>/dev/null; then
-    IS_DHCP=true
-elif [ -f "/var/lib/dhcp/dhclient.${ETH}.leases" ] || [ -f "/var/lib/dhclient/dhclient-${ETH}.leases" ]; then
-    IS_DHCP=true
-elif [ -d /etc/netplan ] && grep -rql "dhcp4.*true\|dhcp4.*yes" /etc/netplan/ 2>/dev/null; then
-    IS_DHCP=true
-elif [ -f /etc/network/interfaces ] && grep -A5 "$ETH" /etc/network/interfaces 2>/dev/null | grep -q "dhcp"; then
-    IS_DHCP=true
-elif [ -d /etc/NetworkManager/system-connections ] && nmcli -t -f NAME,DEVICE con show --active 2>/dev/null | grep -q "$ETH" && \
-     nmcli -t -f ipv4.method con show "$(nmcli -t -f NAME,DEVICE con show --active 2>/dev/null | grep "$ETH" | cut -d: -f1)" 2>/dev/null | grep -q "auto"; then
-    IS_DHCP=true
-fi
-
-if [ "$IS_DHCP" = true ]; then
-    echo "网络检测: [DHCP 动态获取]"
-    echo "  当前 IP=$ADDRESS | 网关=$GATEWAY | 接口=$ETH"
-    echo "  RouterOS 将配置为 DHCP Client 自动获取地址"
-else
-    echo "网络检测: [静态 IP]"
-    echo "  IP=$ADDRESS | 网关=$GATEWAY | 接口=$ETH"
-fi
-
-# --- 5. 离线注入配置 (losetup 方式) ---
-echo "正在注入配置到镜像..."
-mkdir -p /mnt/ros_tmp
-
-LOOPDEV=$(losetup -f --show -P /tmp/chr.img)
-if [ -z "$LOOPDEV" ]; then
-    echo "Warning: losetup 挂载失败，跳过配置注入"
-else
-    sleep 1
-
-    echo "分区扫描:"
-    ls -la "${LOOPDEV}"* 2>/dev/null
-
-    FOUND_PART=""
-    for part in "${LOOPDEV}"p{1..5} "${LOOPDEV}"{1..5}; do
-        [ -e "$part" ] || continue
-        echo "  尝试挂载: $part ($(blkid -s TYPE -o value "$part" 2>/dev/null || echo '未知文件系统'))"
-        if mount "$part" /mnt/ros_tmp 2>/dev/null; then
-            echo "    已挂载，目录内容: $(ls /mnt/ros_tmp 2>/dev/null)"
-            if [ -d /mnt/ros_tmp/rw ]; then
-                FOUND_PART="$part"
-                break
-            fi
-            umount /mnt/ros_tmp 2>/dev/null || true
-        fi
-    done
-
-    if [ -z "$FOUND_PART" ]; then
-        echo "Warning: 无法在镜像中找到 rw 配置目录，跳过配置注入"
-        losetup -d "$LOOPDEV" 2>/dev/null || true
-    else
-        if [ "$IS_DHCP" = true ]; then
-            cat > /mnt/ros_tmp/rw/autorun.scr <<EOF
-/interface ethernet set [ find default-name=ether1 ] name=wan
-/ip dhcp-client add interface=wan disabled=no
-/ip service set telnet disabled=yes
-/ip service set ssh disabled=no port=22
-/ip service set winbox disabled=no
-EOF
-        else
-            cat > /mnt/ros_tmp/rw/autorun.scr <<EOF
-/interface ethernet set [ find default-name=ether1 ] name=wan
-/ip address add address=$ADDRESS interface=wan
-/ip route add gateway=$GATEWAY
-/ip service set telnet disabled=yes
-/ip service set ssh disabled=no port=22
-/ip service set winbox disabled=no
-EOF
-        fi
-
-        echo "配置注入成功！(挂载分区: $FOUND_PART)"
-        sync
-        umount /mnt/ros_tmp
-        losetup -d "$LOOPDEV"
-    fi
-fi
-
-# --- 6. 写入硬盘 ---
-STORAGE=$(lsblk -dn -o NAME,TYPE | awk '$2=="disk"{print $1; exit}')
 if [ -z "$STORAGE" ]; then
     echo "Error: 找不到物理硬盘"
     exit 1
 fi
 
+if ip route show default dev "$ETH" | grep -q "proto dhcp"; then
+    IS_DHCP="yes"
+    echo "网络检测: [DHCP 动态获取]"
+    echo "  当前 IP=$ADDRESS | 网关=$GATEWAY | 接口=$ETH"
+else
+    IS_DHCP="no"
+    echo "网络检测: [静态 IP]"
+    echo "  IP=$ADDRESS | 网关=$GATEWAY | 接口=$ETH"
+fi
+
+# --- 5. 注入配置 (offset=33571840 为 CHR 镜像 RW 分区偏移量) ---
+echo "正在注入配置到镜像..."
+mkdir -p /mnt
+
+if mount -o loop,offset=33571840 "$IMG_PATH" /mnt; then
+    mkdir -p /mnt/rw
+
+    if [ "$IS_DHCP" = "yes" ]; then
+        cat > /mnt/rw/autorun.scr <<EOF
+/ip dhcp-client add interface=ether1 disabled=no
+/ip service set telnet disabled=yes
+/ip service set ssh disabled=no port=22
+/ip service set winbox disabled=no
+EOF
+    else
+        cat > /mnt/rw/autorun.scr <<EOF
+/ip address add address=$ADDRESS interface=ether1
+/ip route add gateway=$GATEWAY
+/ip service set telnet disabled=yes
+/ip service set ssh disabled=no port=22
+/ip service set winbox disabled=no
+EOF
+    fi
+
+    echo "注入脚本内容:"
+    cat /mnt/rw/autorun.scr
+    umount /mnt
+    echo "配置注入成功！"
+else
+    echo "Warning: 挂载镜像失败 (offset 可能不匹配)，跳过注入，继续写入原镜像。"
+fi
+
+# --- 6. 写入硬盘 ---
 echo "============================================="
 echo "  即将写入目标硬盘: /dev/$STORAGE"
 echo "  RouterOS 版本:    $VERSION"
-if [ "$IS_DHCP" = true ]; then
+if [ "$IS_DHCP" = "yes" ]; then
     echo "  网络模式:         DHCP 自动获取"
 else
     echo "  网络模式:         静态 IP ($ADDRESS)"
 fi
-echo "  密码:             已内置于镜像"
 echo "============================================="
 echo "正在写入 (请勿断电)..."
 
-dd if=/tmp/chr.img of=/dev/"$STORAGE" bs=4M oflag=sync status=progress
+dd if="$IMG_PATH" of=/dev/"$STORAGE" bs=4M oflag=sync status=progress
 
 # --- 7. 重启 ---
 echo "安装完成！3秒后重启系统..."
