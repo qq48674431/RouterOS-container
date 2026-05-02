@@ -10,6 +10,9 @@ MikroTik RouterOS CHR 一键安装脚本，支持 UEFI / Legacy BIOS 双模式�
 |------|-----------|-----------|
 | 7.20.8 | `chr-7.20.8.img` | `chr-7.20.8-legacy-bios.img` |
 
+Release 里附带的是**精简 raw 镜像**（约 128MB 量级，适合一键 DD）。  
+若把 VMware 整盘 `qemu-img convert` 成 raw，会得到约 **1GB+** 的文件，体积大、下载慢，本仓库**不采用**那种整盘包；密码与网络由安装脚本通过 `autorun.scr` 注入。
+
 ---
 
 ## 安装步骤
@@ -32,17 +35,25 @@ SSH 登录服务器后，执行以下命令：
 bash <(curl -Ls https://raw.githubusercontent.com/qq48674431/RouterOS-container/main/install.sh)
 ```
 
+默认 admin 密码为 `admin`，如需自定义可在命令前加环境变量：
+
+```bash
+ROS_PASSWORD="你的密码" bash <(curl -Ls https://raw.githubusercontent.com/qq48674431/RouterOS-container/main/install.sh)
+```
+
 ---
 
 ## 安装后连接
 
-| 方式 | 地址 |
-|------|------|
-| SSH | `ssh admin@你的服务器IP` |
-| Winbox | 使用 Winbox 客户端连接服务器 IP |
-| WebFig | 浏览器访问 `http://你的服务器IP` |
+| 方式 | 默认端口 | 连接方式 |
+|------|---------|---------|
+| SSH | 22 | `ssh admin@服务器公网IP` |
+| Winbox | 8291 | Winbox 客户端连接服务器公网 IP |
+| WebFig | 80 | 浏览器访问 `http://服务器公网IP` |
 
-默认用户名：`admin`，密码已内置于镜像中。
+默认用户名：`admin`，密码：`admin`（或安装时自定义的密码）。
+
+> **云服务器注意**：需在安全组/防火墙放行以上端口（22、80、8291），否则无法远程连接。
 
 ---
 
@@ -71,3 +82,4 @@ dd 写入物理硬盘
 - 此操作会**覆盖整个硬盘**，原系统数据将全部丢失
 - 执行前请确认服务器可通过 VNC/IPMI 等方式救援，避免失联后无法恢复
 - 国内服务器如果无法访问 GitHub，需先配置代理或使用加速镜像
+- **维护者**：向 Release 上传镜像时请使用精简 **~128MB** 的 CHR raw，勿上传 VMware 整盘转换后的 **1GB+** img（脚本按精简镜像的 RW 偏移注入配置）
