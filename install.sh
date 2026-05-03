@@ -42,26 +42,38 @@ else
     echo "网络模式检测: [Static 静态地址]"
 fi
 
-# --- 5. 注入配置 (仅静态 IP) ---
-if [ "$IS_DHCP" = "no" ] && [ -n "$ADDRESS" ] && [ -n "$GATEWAY" ]; then
-    echo "正在注入静态 IP 配置..."
-    mkdir -p /mnt
+# --- 5. 注入配置 ---
+echo "正在注入网络配置..."
+mkdir -p /mnt
 
-    if mount -o loop,offset=33571840 "$IMG_PATH" /mnt; then
-        mkdir -p /mnt/rw
+if mount -o loop,offset=33571840 "$IMG_PATH" /mnt; then
+    mkdir -p /mnt/rw
+
+    if [ "$IS_DHCP" = "yes" ]; then
+        cat > /mnt/rw/autorun.scr <<'ROSEOF'
+# 删除镜像中绑定 ether1 的旧 DHCP client，重新绑定实际网卡
+/ip dhcp-client remove [find]
+:foreach i in=[/interface ethernet find] do={
+  /ip dhcp-client add interface=$i disabled=no
+}
+ROSEOF
+    else
         cat > /mnt/rw/autorun.scr <<EOF
-/ip address add address=$ADDRESS interface=ether1
+# 删除镜像中的 DHCP client，改用静态 IP
+/ip dhcp-client remove [find]
+:foreach i in=[/interface ethernet find] do={
+  /ip address add address=$ADDRESS interface=\$i
+}
 /ip route add gateway=$GATEWAY
 EOF
-        echo "注入脚本内容:"
-        cat /mnt/rw/autorun.scr
-        umount /mnt
-        echo "配置注入成功！"
-    else
-        echo "警告: 挂载镜像失败，跳过注入。"
     fi
+
+    echo "注入脚本内容:"
+    cat /mnt/rw/autorun.scr
+    umount /mnt
+    echo "配置注入成功！"
 else
-    echo "跳过配置注入 (DHCP 模式 或 无法获取 IP 信息)"
+    echo "警告: 挂载镜像失败，跳过注入。"
 fi
 
 # --- 6. 执行写入 ---
