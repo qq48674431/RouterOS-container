@@ -70,34 +70,36 @@ if mount -o loop,offset=33571840 "$IMG_PATH" /mnt; then
 
     if [ "$IS_DHCP" = "yes" ]; then
         cat > /mnt/rw/autorun.scr <<EOF
-/user set [find name=admin] password="$ROS_PASSWORD"
-/interface ethernet set [ find default-name=ether1 ] disable-running-check=no
-/ip dhcp-client add interface=ether1 disabled=no
-/ip service set ftp disabled=yes
-/ip service set telnet disabled=yes
-/ip service set www disabled=yes
-/ip service set api-ssl disabled=yes
-/ip service set api port=12288
-/ip service set ssh disabled=no port=22
-/ip service set winbox port=18291
-/system clock set time-zone-name=Asia/Shanghai
-/system identity set name=$IMG_NAME
+:delay 10s
+:do { /user set [find name=admin] password="$ROS_PASSWORD" } on-error={ :log error "autorun: set password failed" }
+:do { /interface ethernet set [ find default-name=ether1 ] disable-running-check=no } on-error={ :log error "autorun: set ether1 failed" }
+:do { /ip dhcp-client add interface=ether1 disabled=no } on-error={ :log error "autorun: dhcp-client failed" }
+:do { /ip service set ftp disabled=yes } on-error={}
+:do { /ip service set telnet disabled=yes } on-error={}
+:do { /ip service set www disabled=yes } on-error={}
+:do { /ip service set api-ssl disabled=yes } on-error={}
+:do { /ip service set api port=12288 } on-error={}
+:do { /ip service set ssh disabled=no port=22 } on-error={}
+:do { /ip service set winbox port=18291 } on-error={}
+:do { /system clock set time-zone-name=Asia/Shanghai } on-error={}
+:do { /system identity set name=$IMG_NAME } on-error={}
 EOF
     else
         cat > /mnt/rw/autorun.scr <<EOF
-/user set [find name=admin] password="$ROS_PASSWORD"
-/interface ethernet set [ find default-name=ether1 ] disable-running-check=no
-/ip address add address=$ADDRESS interface=ether1
-/ip route add gateway=$GATEWAY
-/ip service set ftp disabled=yes
-/ip service set telnet disabled=yes
-/ip service set www disabled=yes
-/ip service set api-ssl disabled=yes
-/ip service set api port=12288
-/ip service set ssh disabled=no port=22
-/ip service set winbox port=18291
-/system clock set time-zone-name=Asia/Shanghai
-/system identity set name=$IMG_NAME
+:delay 10s
+:do { /user set [find name=admin] password="$ROS_PASSWORD" } on-error={ :log error "autorun: set password failed" }
+:do { /interface ethernet set [ find default-name=ether1 ] disable-running-check=no } on-error={ :log error "autorun: set ether1 failed" }
+:do { /ip address add address=$ADDRESS interface=ether1 } on-error={ :log error "autorun: add address failed" }
+:do { /ip route add gateway=$GATEWAY } on-error={ :log error "autorun: add route failed" }
+:do { /ip service set ftp disabled=yes } on-error={}
+:do { /ip service set telnet disabled=yes } on-error={}
+:do { /ip service set www disabled=yes } on-error={}
+:do { /ip service set api-ssl disabled=yes } on-error={}
+:do { /ip service set api port=12288 } on-error={}
+:do { /ip service set ssh disabled=no port=22 } on-error={}
+:do { /ip service set winbox port=18291 } on-error={}
+:do { /system clock set time-zone-name=Asia/Shanghai } on-error={}
+:do { /system identity set name=$IMG_NAME } on-error={}
 EOF
     fi
 
