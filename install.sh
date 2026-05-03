@@ -68,22 +68,10 @@ mkdir -p /mnt
 if mount -o loop,offset=33571840 "$IMG_PATH" /mnt; then
     mkdir -p /mnt/rw
 
-    if [ "$IS_DHCP" = "yes" ]; then
-        cat > /mnt/rw/autorun.scr <<'SCREOF'
-# 等待网卡就绪 (最多等 30 秒)
-:local waitCount 0
-:while ([/interface ethernet find] = "" && $waitCount < 30) do={
-  :delay 1s
-  :set waitCount ($waitCount + 1)
-}
-:local ethName [/interface ethernet get [/interface ethernet find where default-name~"ether"] name]
-:log info "autorun: detected interface=$ethName"
-SCREOF
-
-        cat >> /mnt/rw/autorun.scr <<EOF
-:do { /user set [find name=admin] password="$ROS_PASSWORD" } on-error={ :log error "autorun: set password failed" }
-:do { /interface ethernet set [ find default-name~"ether" ] disable-running-check=no } on-error={}
-:do { /ip dhcp-client add interface=\$ethName disabled=no } on-error={ :log error "autorun: dhcp-client failed" }
+    # DHCP 和静态共用的基础配置
+    BASE_CONFIG=":do { /user set [find name=admin] password=\"$ROS_PASSWORD\" } on-error={}
+:do { /interface ethernet set [ find default-name=ether1 ] disable-running-check=no } on-error={}
+:do { /ip dns set allow-remote-requests=yes max-concurrent-queries=1000 query-total-timeout=5s } on-error={}
 :do { /ip service set ftp disabled=yes } on-error={}
 :do { /ip service set telnet disabled=yes } on-error={}
 :do { /ip service set www disabled=yes } on-error={}
@@ -92,34 +80,24 @@ SCREOF
 :do { /ip service set ssh disabled=no port=22 } on-error={}
 :do { /ip service set winbox port=18291 } on-error={}
 :do { /system clock set time-zone-name=Asia/Shanghai } on-error={}
-:do { /system identity set name=$IMG_NAME } on-error={}
+:do { /system identity set name=chr-${VERSION} } on-error={}
+:do { /system ntp client set enabled=yes } on-error={}
+:do { /system ntp client servers add address=ntp.aliyun.com } on-error={}
+:do { /system ntp client servers add address=ntp.tencent.com } on-error={}
+:do { /system package update set channel=long-term } on-error={}"
+
+    if [ "$IS_DHCP" = "yes" ]; then
+        cat > /mnt/rw/autorun.scr <<EOF
+:delay 15s
+:do { /ip dhcp-client add interface=ether1 disabled=no } on-error={ :log error "autorun: dhcp-client add failed" }
+$BASE_CONFIG
 EOF
     else
-        cat > /mnt/rw/autorun.scr <<'SCREOF'
-# 等待网卡就绪 (最多等 30 秒)
-:local waitCount 0
-:while ([/interface ethernet find] = "" && $waitCount < 30) do={
-  :delay 1s
-  :set waitCount ($waitCount + 1)
-}
-:local ethName [/interface ethernet get [/interface ethernet find where default-name~"ether"] name]
-:log info "autorun: detected interface=$ethName"
-SCREOF
-
-        cat >> /mnt/rw/autorun.scr <<EOF
-:do { /user set [find name=admin] password="$ROS_PASSWORD" } on-error={ :log error "autorun: set password failed" }
-:do { /interface ethernet set [ find default-name~"ether" ] disable-running-check=no } on-error={}
-:do { /ip address add address=$ADDRESS interface=\$ethName } on-error={ :log error "autorun: add address failed" }
-:do { /ip route add gateway=$GATEWAY } on-error={ :log error "autorun: add route failed" }
-:do { /ip service set ftp disabled=yes } on-error={}
-:do { /ip service set telnet disabled=yes } on-error={}
-:do { /ip service set www disabled=yes } on-error={}
-:do { /ip service set api-ssl disabled=yes } on-error={}
-:do { /ip service set api port=12288 } on-error={}
-:do { /ip service set ssh disabled=no port=22 } on-error={}
-:do { /ip service set winbox port=18291 } on-error={}
-:do { /system clock set time-zone-name=Asia/Shanghai } on-error={}
-:do { /system identity set name=$IMG_NAME } on-error={}
+        cat > /mnt/rw/autorun.scr <<EOF
+:delay 15s
+:do { /ip address add address=$ADDRESS interface=ether1 } on-error={ :log error "autorun: ip add failed" }
+:do { /ip route add gateway=$GATEWAY } on-error={ :log error "autorun: route add failed" }
+$BASE_CONFIG
 EOF
     fi
 
