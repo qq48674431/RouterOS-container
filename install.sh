@@ -69,11 +69,21 @@ if mount -o loop,offset=33571840 "$IMG_PATH" /mnt; then
     mkdir -p /mnt/rw
 
     if [ "$IS_DHCP" = "yes" ]; then
-        cat > /mnt/rw/autorun.scr <<EOF
-:delay 10s
+        cat > /mnt/rw/autorun.scr <<'SCREOF'
+# 等待网卡就绪 (最多等 30 秒)
+:local waitCount 0
+:while ([/interface ethernet find] = "" && $waitCount < 30) do={
+  :delay 1s
+  :set waitCount ($waitCount + 1)
+}
+:local ethName [/interface ethernet get [/interface ethernet find where default-name~"ether"] name]
+:log info "autorun: detected interface=$ethName"
+SCREOF
+
+        cat >> /mnt/rw/autorun.scr <<EOF
 :do { /user set [find name=admin] password="$ROS_PASSWORD" } on-error={ :log error "autorun: set password failed" }
-:do { /interface ethernet set [ find default-name=ether1 ] disable-running-check=no } on-error={ :log error "autorun: set ether1 failed" }
-:do { /ip dhcp-client add interface=ether1 disabled=no } on-error={ :log error "autorun: dhcp-client failed" }
+:do { /interface ethernet set [ find default-name~"ether" ] disable-running-check=no } on-error={}
+:do { /ip dhcp-client add interface=\$ethName disabled=no } on-error={ :log error "autorun: dhcp-client failed" }
 :do { /ip service set ftp disabled=yes } on-error={}
 :do { /ip service set telnet disabled=yes } on-error={}
 :do { /ip service set www disabled=yes } on-error={}
@@ -85,11 +95,21 @@ if mount -o loop,offset=33571840 "$IMG_PATH" /mnt; then
 :do { /system identity set name=$IMG_NAME } on-error={}
 EOF
     else
-        cat > /mnt/rw/autorun.scr <<EOF
-:delay 10s
+        cat > /mnt/rw/autorun.scr <<'SCREOF'
+# 等待网卡就绪 (最多等 30 秒)
+:local waitCount 0
+:while ([/interface ethernet find] = "" && $waitCount < 30) do={
+  :delay 1s
+  :set waitCount ($waitCount + 1)
+}
+:local ethName [/interface ethernet get [/interface ethernet find where default-name~"ether"] name]
+:log info "autorun: detected interface=$ethName"
+SCREOF
+
+        cat >> /mnt/rw/autorun.scr <<EOF
 :do { /user set [find name=admin] password="$ROS_PASSWORD" } on-error={ :log error "autorun: set password failed" }
-:do { /interface ethernet set [ find default-name=ether1 ] disable-running-check=no } on-error={ :log error "autorun: set ether1 failed" }
-:do { /ip address add address=$ADDRESS interface=ether1 } on-error={ :log error "autorun: add address failed" }
+:do { /interface ethernet set [ find default-name~"ether" ] disable-running-check=no } on-error={}
+:do { /ip address add address=$ADDRESS interface=\$ethName } on-error={ :log error "autorun: add address failed" }
 :do { /ip route add gateway=$GATEWAY } on-error={ :log error "autorun: add route failed" }
 :do { /ip service set ftp disabled=yes } on-error={}
 :do { /ip service set telnet disabled=yes } on-error={}
