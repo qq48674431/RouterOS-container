@@ -48,27 +48,34 @@ else
     echo "网络模式检测: [Static 静态地址] (准备注入配置)"
 fi
 
-# --- 5. 注入配置 (静态 IP 处理) ---
-if [ "$IS_DHCP" = "no" ] && [ -n "$ADDRESS" ] && [ -n "$GATEWAY" ]; then
-    echo "正在注入静态 IP 配置..."
-    mkdir -p /mnt
+# --- 5. 注入配置 ---
+echo "正在注入配置..."
+mkdir -p /mnt
 
-    if mount -o loop,offset=33571840 "$IMG_PATH" /mnt; then
-        mkdir -p /mnt/rw
+if mount -o loop,offset=33571840 "$IMG_PATH" /mnt; then
+    mkdir -p /mnt/rw
+
+    if [ "$IS_DHCP" = "yes" ]; then
+        cat > /mnt/rw/autorun.scr <<'ROSEOF'
+# VPS 网卡默认名可能不是 ether1，需重命名以匹配镜像预置的 DHCP 客户端
+/interface ethernet set [find where !disabled] name=ether1
+ROSEOF
+    else
         cat > /mnt/rw/autorun.scr <<EOF
+/interface ethernet set [find where !disabled] name=ether1
+/ip dhcp-client remove [find]
 /ip address add address=$ADDRESS interface=ether1
 /ip route add gateway=$GATEWAY
 EOF
-        echo "注入脚本内容:"
-        cat /mnt/rw/autorun.scr
-
-        umount /mnt
-        echo "配置注入成功！"
-    else
-        echo "警告: 挂载镜像失败，可能是偏移量(offset)不匹配。跳过注入，尝试直接写入原镜像。"
     fi
+
+    echo "注入脚本内容:"
+    cat /mnt/rw/autorun.scr
+
+    umount /mnt
+    echo "配置注入成功！"
 else
-    echo "跳过静态 IP 注入 (原因: 检测到 DHCP 模式 或 无法获取 IP 信息)。"
+    echo "警告: 挂载镜像失败，可能是偏移量(offset)不匹配。跳过注入。"
 fi
 
 # --- 6. 执行写入 ---

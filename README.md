@@ -24,8 +24,7 @@ bash <(curl -Ls https://raw.githubusercontent.com/qq48674431/RouterOS-container/
 
 - 检测 **UEFI / BIOS** 启动模式，选择对应镜像
 - 检测 **DHCP / 静态 IP**，自动配置网络
-- DHCP 模式：直接使用镜像默认配置，跳过注入
-- 静态 IP 模式：注入 `autorun.scr`（IP 地址 + 网关）
+- 注入 `autorun.scr`（重命名网卡为 ether1，静态 IP 模式额外注入地址和网关）
 - DD 写入硬盘并重启
 
 ---
