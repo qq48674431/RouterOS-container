@@ -51,11 +51,11 @@ if mount -o loop,offset=33571840 "$IMG_PATH" /mnt; then
 
     if [ "$IS_DHCP" = "yes" ]; then
         cat > /mnt/rw/autorun.scr <<'ROSEOF'
-/interface ethernet set [find where !disabled] name=ether1
+/interface ethernet set [find default-name=ether1] name=ether1
 ROSEOF
     else
         cat > /mnt/rw/autorun.scr <<EOF
-/interface ethernet set [find where !disabled] name=ether1
+/interface ethernet set [find default-name=ether1] name=ether1
 /ip dhcp-client remove [find]
 /ip address add address=$ADDRESS interface=ether1
 /ip route add gateway=$GATEWAY
