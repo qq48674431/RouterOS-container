@@ -20,17 +20,12 @@ SSH 登录服务器后，执行以下命令：
 bash <(curl -Ls https://raw.githubusercontent.com/qq48674431/RouterOS-container/main/install.sh)
 ```
 
-自定义密码（默认 `admin`）：
-
-```bash
-ROS_PASSWORD="你的密码" bash <(curl -Ls https://raw.githubusercontent.com/qq48674431/RouterOS-container/main/install.sh)
-```
-
 ### 脚本自动完成
 
 - 检测 **UEFI / BIOS** 启动模式，选择对应镜像
 - 检测 **DHCP / 静态 IP**，自动配置网络
-- 注入 `autorun.scr` 配置（密码、网络、服务端口等）
+- DHCP 模式：直接使用镜像默认配置，跳过注入
+- 静态 IP 模式：注入 `autorun.scr`（IP 地址 + 网关）
 - DD 写入硬盘并重启
 
 ---
@@ -43,7 +38,7 @@ ROS_PASSWORD="你的密码" bash <(curl -Ls https://raw.githubusercontent.com/qq
 | SSH | **22** | `ssh admin@服务器公网IP` |
 | API | 12288 | API 接口 |
 
-默认用户名：`admin`，密码：`admin`（或安装时自定义的密码）。
+默认用户名：`admin`，密码：`admin`。
 
 > **云服务器注意**：需在安全组/防火墙放行 **18291**（Winbox）、**22**（SSH）、**12288**（API）端口。
 
