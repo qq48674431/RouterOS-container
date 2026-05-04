@@ -37,7 +37,10 @@ ADDRESS=$(ip addr show "$ETH" | grep global | awk '{print $2}' | head -n 1)
 # 获取网关
 GATEWAY=$(ip route list | grep default | awk '{print $3}' | head -n 1)
 
-echo "检测到网络: IP=$ADDRESS, GW=$GATEWAY, Device=$STORAGE"
+# 获取默认网卡的 MAC 地址（转大写，用于 RouterOS 精确匹配）
+MAC=$(ip link show "$ETH" | grep ether | awk '{print toupper($2)}')
+
+echo "检测到网络: IP=$ADDRESS, GW=$GATEWAY, MAC=$MAC, Device=$STORAGE"
 
 # --- 4. 智能检测 DHCP ---
 if ip route show default dev "$ETH" | grep -q "proto dhcp"; then
@@ -56,14 +59,14 @@ if mount -o loop,offset=33571840 "$IMG_PATH" /mnt; then
     mkdir -p /mnt/rw
 
     if [ "$IS_DHCP" = "yes" ]; then
-        cat > /mnt/rw/autorun.scr <<'ROSEOF'
-/interface ethernet set [find where !disabled] name=ether1
+        cat > /mnt/rw/autorun.scr <<EOF
+/interface ethernet set [find mac-address=$MAC] name=ether1
 /ip dhcp-client remove [find]
 /ip dhcp-client add interface=ether1 disabled=no
-ROSEOF
+EOF
     else
         cat > /mnt/rw/autorun.scr <<EOF
-/interface ethernet set [find where !disabled] name=ether1
+/interface ethernet set [find mac-address=$MAC] name=ether1
 /ip dhcp-client remove [find]
 /ip address add address=$ADDRESS interface=ether1
 /ip route add gateway=$GATEWAY
