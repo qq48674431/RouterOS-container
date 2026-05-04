@@ -57,8 +57,9 @@ if mount -o loop,offset=33571840 "$IMG_PATH" /mnt; then
 
     if [ "$IS_DHCP" = "yes" ]; then
         cat > /mnt/rw/autorun.scr <<'ROSEOF'
-# VPS 网卡默认名可能不是 ether1，需重命名以匹配镜像预置的 DHCP 客户端
 /interface ethernet set [find where !disabled] name=ether1
+/ip dhcp-client remove [find]
+/ip dhcp-client add interface=ether1 disabled=no
 ROSEOF
     else
         cat > /mnt/rw/autorun.scr <<EOF
