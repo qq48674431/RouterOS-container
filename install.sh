@@ -51,19 +51,13 @@ if mount -o loop,offset=33571840 "$IMG_PATH" /mnt; then
 
     if [ "$IS_DHCP" = "yes" ]; then
         cat > /mnt/rw/autorun.scr <<'ROSEOF'
-# 删除镜像中绑定 ether1 的旧 DHCP client，重新绑定实际网卡
-/ip dhcp-client remove [find]
-:foreach i in=[/interface ethernet find] do={
-  /ip dhcp-client add interface=$i disabled=no
-}
+/interface ethernet set [find where !disabled] name=ether1
 ROSEOF
     else
         cat > /mnt/rw/autorun.scr <<EOF
-# 删除镜像中的 DHCP client，改用静态 IP
+/interface ethernet set [find where !disabled] name=ether1
 /ip dhcp-client remove [find]
-:foreach i in=[/interface ethernet find] do={
-  /ip address add address=$ADDRESS interface=\$i
-}
+/ip address add address=$ADDRESS interface=ether1
 /ip route add gateway=$GATEWAY
 EOF
     fi
