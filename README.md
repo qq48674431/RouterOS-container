@@ -9,7 +9,7 @@ MikroTik RouterOS CHR v7.20.8 一键安装脚本，支持 UEFI / Legacy BIOS 双
 ### 国内 VPS（走本地服务器，速度快）
 
 ```bash
-bash <(curl -Ls https://ling.shenhai.live/vps-RouterOS-container/install.sh)
+bash <(curl -Ls http://ling.shenhai.live/vps-RouterOS-container/install.sh)
 ```
 
 ### 海外 VPS（走 GitHub）
