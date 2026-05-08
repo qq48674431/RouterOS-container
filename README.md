@@ -49,3 +49,23 @@ bash <(curl -Ls https://raw.githubusercontent.com/qq48674431/RouterOS-container/
 - 此操作会**覆盖整个硬盘**，原系统数据将全部丢失
 - 执行前请确认服务器可通过 VNC/IPMI 等方式救援
 - 国内服务器推荐使用本地源命令，无需担心 GitHub 被墙
+
+---
+
+## 文件包本地安装
+
+适用于无法使用一键脚本的环境，手动上传安装包进行安装。
+
+### 步骤
+
+1. 通过 SCP/SFTP 将 `install.sh` 上传到服务器
+
+2. SSH 登录服务器，执行安装脚本：
+
+```bash
+bash install.sh
+```
+
+脚本会自动完成镜像下载、网络检测、配置注入和 DD 写盘，执行完毕后自动重启进入 RouterOS。
+
+<!-- CHECKPOINT id="ckpt_mowfb3nj_qzws5i" time="2026-05-08T04:36:55.999Z" note="auto" fixes=0 questions=0 highlights=0 sections="" -->
